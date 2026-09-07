@@ -13,6 +13,11 @@ but it does not touch the talent system: a "Vanilla" character still gets WotLK'
 and glyphs. This module closes that gap. It depends on IP for a character's era and never edits IP's
 data.
 
+> Looking for a complete server instead of a module? This mod was developed for, and is installed
+> automatically by, **[azerothcore-playerbots-docker-automated](https://github.com/lathcf/azerothcore-playerbots-docker-automated)**
+> — a Docker deployment of AzerothCore + playerbots + Individual Progression with this and several
+> other custom mods pre-wired.
+
 ### What you get
 * **Era trees for all nine original classes, in both Vanilla (51 points) and TBC (61 points)**,
   authored from each era's own data. WotLK-era characters and Death Knights keep the stock trees.
@@ -127,5 +132,7 @@ stops applying after an upstream change, `apply-patches.sh` names it; regenerate
 
 ## License and credits
 MIT (see `LICENSE`). The core patches modify AzerothCore (AGPL-3.0) source and carry that licence.
+Companion project: [azerothcore-playerbots-docker-automated](https://github.com/lathcf/azerothcore-playerbots-docker-automated)
+(the full Docker server this module ships in).
 Thanks to AzerothCore, ZhengPeiRu21's mod-individual-progression, the mod-playerbots project,
 wago.tools (TBC 2.5.4 talent data) and Daribon's 1.12.1 talent calculator data.
