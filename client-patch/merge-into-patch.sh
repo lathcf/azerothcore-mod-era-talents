@@ -11,8 +11,8 @@
 #   e.g. client-patch/merge-into-patch.sh client-patch/out/patch-V.mpq
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MPQPACK="$ROOT/client-patch/mpqpack"
-MPQREAD="$ROOT/client-patch/mpqread"
+MPQPACK="${MPQPACK:-$ROOT/client-patch/mpqpack}"   # env override: the Docker image sets its own
+MPQREAD="${MPQREAD:-$ROOT/client-patch/mpqread}"
 # The dataset list comes from era-data/datasets.txt (the single source of truth), in manifest
 # order — adding a class needs no edit here. (generation_stamp() sorts its inputs, so the order
 # is not itself load-bearing for the stamp; era_audit's cross-dataset id check forbids the

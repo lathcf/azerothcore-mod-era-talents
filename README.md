@@ -78,8 +78,10 @@ Two pieces, both required for the intended experience:
 * **`patch-V.mpq`** — copy to `World of Warcraft/Data/`. This is IP's own client patch with this
   module's custom buff/debuff rows merged in, so custom auras (e.g. the Improved Blizzard "Chilled"
   debuff) show an icon and name. Without it everything still works; those auras just have no icon.
-  Build it with `client-patch/build-mpqpack.sh` (once) then `client-patch/build-client-patch.sh`
-  (writes `client-patch/out/patch-V.mpq`), or download one from this repo's Releases when attached.
+  Build it with `client-patch/build-client-patch.sh` (writes `client-patch/out/patch-V.mpq`). It needs
+  **either Docker or** a native toolchain (`git cmake gcc g++ make zlib1g-dev libbz2-dev`, python3 +
+  PyYAML, `7z`): with only Docker present it builds and runs the MPQ tools inside a throwaway image
+  automatically. Or download one from this repo's Releases when attached.
   The addon warns in red chat when a player's `patch-V.mpq` is from a stale generation.
 
 ## Configuration (`conf/mod_era_talents.conf.dist`)

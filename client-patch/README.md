@@ -22,7 +22,8 @@ are included.
 | `mpqpack` / `mpqpack.c` | MPQ packer (StormLib, statically linked). Binary is gitignored. |
 | `mpqread` / `mpqread.c` | Extract one file from an MPQ. Binary is gitignored. |
 | `build-mpqpack.sh` | Builds BOTH binaries above. Self-bootstrapping: auto-clones + builds `deps/StormLib` (gitignored) if absent. No sudo needed beyond a basic toolchain (`git cmake gcc g++ make` + zlib/bz2 dev headers). |
-| `build-client-patch.sh` | The player-facing build: fetches IP's `optional/patch-V.7z` (`--from-ip`, default; needs `7z`) or takes `--base <patch-V.mpq>`, and writes the merged `out/patch-V.mpq`. |
+| `build-client-patch.sh` | The player-facing build: fetches IP's `optional/patch-V.7z` (`--from-ip`, default) or takes `--base <patch-V.mpq>`, and writes the merged `out/patch-V.mpq` (`--out`). Mode `auto`: native tools when all present (`mpqpack`+`mpqread`, python3+PyYAML or uv, `7z`), otherwise **Docker** — builds `Dockerfile` into `mod-era-talents-mpq:local` (StormLib + tools + python + 7z) and runs the merge in it. `--mode native|docker` / `$ERA_MPQ_MODE` force one. |
+| `Dockerfile` | The throwaway tool image used by the Docker mode. |
 | `merge-into-patch.sh` | Merge our rows **into an existing** patch MPQ (see gotcha below). |
 
 ## The load-order gotcha (why `merge-into-patch.sh` exists)
@@ -33,8 +34,8 @@ silently overridden and our rows vanish. The fix is to **merge our rows into `pa
 coexist:
 
 ```bash
-client-patch/build-mpqpack.sh                 # once: builds mpqpack + mpqread (clones StormLib)
 client-patch/build-client-patch.sh            # fetches IP's patch-V, merges, -> client-patch/out/patch-V.mpq
+                                              # (native tools if present, else Docker; build-mpqpack.sh builds the native ones)
 # or, with a patch-V.mpq you already have:
 client-patch/merge-into-patch.sh /path/to/patch-V.mpq client-patch/out/patch-V.mpq
 ```
