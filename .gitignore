@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+client-patch/out/
+client-patch/mpqpack
+client-patch/mpqread
+deps/
+.venv/
+client-patch/base/

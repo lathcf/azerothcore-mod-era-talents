@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+## CUSTOM SQL paths for db_assembler.sh (the core's DB updater also auto-applies data/sql/*/base).
+DB_CHARACTERS_CUSTOM_PATHS+=( "$MOD_SKELETON_ROOT/data/sql/characters/base/" )
+DB_WORLD_CUSTOM_PATHS+=( "$MOD_SKELETON_ROOT/data/sql/world/base/" )
