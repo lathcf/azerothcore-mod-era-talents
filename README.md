@@ -53,8 +53,10 @@ data.
    ```bash
    cd /path/to/azerothcore-wotlk
    git clone https://github.com/ZhengPeiRu21/mod-individual-progression.git modules/mod-individual-progression
-   git clone https://github.com/lathcf/mod-era-talents.git modules/mod-era-talents
+   git clone https://github.com/lathcf/azerothcore-mod-era-talents.git modules/mod-era-talents
    ```
+   Keep the directory name **`modules/mod-era-talents`** (the cmake file locates its sibling modules by
+   relative path, and other modules may include its headers from there).
 2. Apply the source patches (core + IP always; playerbots / multibot-bridge only when those
    modules are present):
    ```bash
