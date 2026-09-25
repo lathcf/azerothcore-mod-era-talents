@@ -1,4 +1,4 @@
--- EraTalents panel UI. Reads EraTalentsData[era][class] (structure) + ET.state (dynamic).
+-- EraTalents panel UI. Reads EraTalentsData[era][class] (structure) + a view's state (dynamic).
 --
 -- Visuals mirror the real 3.3.5a Blizzard_TalentUI frame (FrameXML: Blizzard_TalentUI.xml /
 -- .lua / Templates.xml): 384x512 ornate PaperDoll chrome, a FIXED 4-quadrant per-spec parchment
@@ -30,7 +30,7 @@ local SCROLL_X, SCROLL_Y = BG_X, BG_Y
 local SCROLL_W, SCROLL_H = 296, 332
 
 -- Scroll child holds the grid + arrows. 455 is the 7-tier Vanilla height, used only as the
--- initial value at BuildFrame; ShowTab re-derives the height from the ACTIVE tree's deepest
+-- initial value at BuildTreeArea; ShowTab re-derives the height from the ACTIVE tree's deepest
 -- tier (rowY(maxTier) + BTN + 20 -- 455 again for 7 tiers, 581 for TBC's 9), so a 9-tier tree
 -- scrolls to its capstone instead of clipping it outside the child (the old CHILD_H bug).
 local CHILD_W = SCROLL_W
@@ -72,12 +72,6 @@ end
 local function colX(col)  return COL_X0 + col * COL_SPACING end
 local function rowY(tier) return ROW_Y0 + tier * ROW_SPACING end
 
-local function TreeForState()
-  local byClass = EraTalentsData and EraTalentsData[ET.state.era]
-  local tree = byClass and byClass[ET._classId]
-  return tree
-end
-
 -- A talent is REACHABLE (full colour, clickable) exactly like the real tree: enough points spent
 -- in this tree to unlock its tier (node.prereqPoints == 5 * tier), AND its direct prerequisite
 -- talent, if any, is maxed. Otherwise it's locked -> desaturated. Pure -> headless-testable
@@ -93,28 +87,52 @@ function ET.IsReachable(node, spentInTab, ranks, byId)
   return true
 end
 
--- Bind IsReachable to the live state. ET._spentActive / ET._byId are recomputed per ShowTab (both
--- depend only on the active tab, which is all that's ever drawn).
-local function NodeAvailable(node)
-  return ET.IsReachable(node, ET._spentActive, ET.state.ranks, ET._byId)
+-- Points spent per tree {tab1, tab2, tab3} for a rank table. Pure -> headless-testable.
+function ET.SpecPoints(tree, ranks)
+  local pts = { 0, 0, 0 }
+  for _, n in ipairs(tree.talents) do
+    if pts[n.tab] then pts[n.tab] = pts[n.tab] + ((ranks and ranks[n.id]) or 0) end
+  end
+  return pts
 end
 
--- Paint the active tab's tree background from its 4 real quadrant textures, sized to fill the
--- scroll child (CHILD_W x CHILD_H) proportionally -- no gaps or distortion of the art aspect.
-local function SetTreeBackground(bgToken)
+-- The tree with the most points (ties -> the lowest index), or `fallback` when nothing is spent --
+-- Blizzard's primaryTabIndex rule, used to pick the inspect view's opening tab. Pure.
+function ET.PrimaryTab(tree, ranks, fallback)
+  local pts = ET.SpecPoints(tree, ranks)
+  local best, bestPts = fallback, 0
+  for i = 1, 3 do
+    if pts[i] > bestPts then best, bestPts = i, pts[i] end
+  end
+  return best
+end
+
+local function TreeFor(era, classId)
+  local byClass = EraTalentsData and EraTalentsData[era]
+  return byClass and byClass[classId]
+end
+
+-- Bind IsReachable to a view's live state. v.spentActive / v.byId are recomputed per ShowViewTab
+-- (both depend only on the active tab, which is all that's ever drawn).
+local function NodeAvailable(v, node)
+  return ET.IsReachable(node, v.spentActive, v.state.ranks, v.byId)
+end
+
+local function SetTreeBackground(v, bgToken)
   local base = BackgroundBase(bgToken)
-  ET.frame.bgTL:SetTexture(base .. "-TopLeft")
-  ET.frame.bgTR:SetTexture(base .. "-TopRight")
-  ET.frame.bgBL:SetTexture(base .. "-BottomLeft")
-  ET.frame.bgBR:SetTexture(base .. "-BottomRight")
+  local f = v.frame
+  f.bgTL:SetTexture(base .. "-TopLeft")
+  f.bgTR:SetTexture(base .. "-TopRight")
+  f.bgBL:SetTexture(base .. "-BottomLeft")
+  f.bgBR:SetTexture(base .. "-BottomRight")
 end
 
 -- ---------------------------------------------------------------------------
 -- Frame construction (once, lazily).
 -- ---------------------------------------------------------------------------
-local function BuildFrame()
-  if ET.frame then return ET.frame end
-  local f = CreateFrame("Frame", "EraTalentFrame", UIParent)
+-- Own-panel chrome: the floating 384x512 PaperDoll window, portrait, title, close, Pet Talents.
+local function BuildChrome(v)
+  local f = v.frame
   f:SetFrameStrata("HIGH")
   f:SetWidth(FRAME_W)
   f:SetHeight(FRAME_H)
@@ -124,7 +142,6 @@ local function BuildFrame()
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", f.StopMovingOrSizing)
-  f:Hide()
 
   -- Ornate frame chrome (real PaperDoll talent-frame border pieces).
   local chrome = {
@@ -141,7 +158,7 @@ local function BuildFrame()
   end
 
   -- Player portrait (top-left, like the real frame). The client renders unit portraits lazily and
-  -- announces each one with UNIT_PORTRAIT_UPDATE; BuildFrame runs at the first PLAYER_ENTERING_WORLD,
+  -- announces each one with UNIT_PORTRAIT_UPDATE; BuildChrome runs at the first PLAYER_ENTERING_WORLD,
   -- when the player's own portrait is usually NOT rendered yet, so a one-shot SetPortraitTexture here
   -- captured a blank -- whether the circle filled in was a login-timing race (the hunter happened to
   -- win it; every other class lost). Mirror the stock CharacterFrame: re-apply on every
@@ -175,6 +192,13 @@ local function BuildFrame()
   f.petTalents:SetText("Pet Talents")
   f.petTalents:SetScript("OnClick", function() if ET.OpenStockTalents then ET.OpenStockTalents() end end)
   if ET._classId ~= 3 then f.petTalents:Hide() end
+end
+
+-- Tree area shared by every view: fixed parchment, scroll frame + child, arrow overlay, footer bar.
+-- Positions are relative to v.frame, which is 384x512 in both uses (own window; InspectTalentFrame).
+local function BuildTreeArea(v)
+  local f = v.frame
+  local name = f:GetName()
 
   -- FIXED tree background: 4 real quadrants (native sizes -> 320x384) on the main frame. Drawn on
   -- ARTWORK (ABOVE the BORDER-layer chrome, whose dark stone center would otherwise bury a
@@ -196,7 +220,7 @@ local function BuildFrame()
 
   -- Scroll frame (real UIPanelScrollFrameTemplate). Its width == the background width, so the
   -- auto-created scrollbar sits just right of the background art (the blank strip), not the edge.
-  f.scroll = CreateFrame("ScrollFrame", "EraTalentFrameScroll", f, "UIPanelScrollFrameTemplate")
+  f.scroll = CreateFrame("ScrollFrame", name .. "Scroll", f, "UIPanelScrollFrameTemplate")
   f.scroll:SetWidth(SCROLL_W); f.scroll:SetHeight(SCROLL_H)
   f.scroll:SetPoint("TOPLEFT", SCROLL_X, SCROLL_Y)
 
@@ -211,7 +235,7 @@ local function BuildFrame()
 
   -- Scroll child: grid + arrows only (the background is fixed, above). CHILD_H here is just the
   -- bootstrap value; ShowTab re-derives the real height per-tree from the active tree's depth.
-  f.container = CreateFrame("Frame", "EraTalentFrameScrollChild", f.scroll)
+  f.container = CreateFrame("Frame", name .. "ScrollChild", f.scroll)
   f.container:SetWidth(CHILD_W); f.container:SetHeight(CHILD_H)
   f.scroll:SetScrollChild(f.container)
 
@@ -242,31 +266,69 @@ local function BuildFrame()
   f.footerUnspent = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   f.footerUnspent:SetPoint("RIGHT", fbRight, "RIGHT", -8, 0)
 
-  -- Three bottom tabs (real CharacterFrame tab buttons).
+  f.pools = {}            -- [tree] = { [nodeId] = button }  (per tree: a view can show many trees)
+  f._branches = {}        -- pooled branch line textures
+  f._arrows = {}          -- pooled arrowhead textures
+end
+
+-- Three tree tabs. "bottom" = CharacterFrame tabs (own window, as before); "top" = TabButtonTemplate
+-- at the stock InspectTalentFrameTab positions (70,-40 then chained) because the Inspect frame's
+-- bottom already holds its Character/PvP/Talents tabs. Names MUST be <frame>Tab<i>:
+-- PanelTemplates_SetTab resolves tabs by that name.
+local function BuildTabs(v)
+  local f = v.frame
+  local name = f:GetName()
   f.tabs = {}
   for i = 1, 3 do
-    local tab = CreateFrame("Button", "EraTalentFrameTab" .. i, f, "CharacterFrameTabButtonTemplate")
-    if i == 1 then tab:SetPoint("BOTTOMLEFT", 15, 46)
-    else tab:SetPoint("LEFT", f.tabs[i - 1], "RIGHT", -15, 0) end
-    tab:SetScript("OnClick", function() ET.ShowTab(i) end)
+    local tab
+    if v.tabStyle == "top" then
+      tab = CreateFrame("Button", name .. "Tab" .. i, f, "TabButtonTemplate")
+      if i == 1 then tab:SetPoint("TOPLEFT", 70, -40)
+      else tab:SetPoint("LEFT", f.tabs[i - 1], "RIGHT") end
+    else
+      tab = CreateFrame("Button", name .. "Tab" .. i, f, "CharacterFrameTabButtonTemplate")
+      if i == 1 then tab:SetPoint("BOTTOMLEFT", 15, 46)
+      else tab:SetPoint("LEFT", f.tabs[i - 1], "RIGHT", -15, 0) end
+    end
+    tab:SetScript("OnClick", function() ET.ShowViewTab(v, i) end)
     f.tabs[i] = tab
   end
   PanelTemplates_SetNumTabs(f, 3)
+end
 
-  f.buttons = {}          -- [nodeId] = button
-  f._branches = {}        -- pooled branch line textures
-  f._arrows = {}          -- pooled arrowhead textures
-
-  ET.frame = f
-  return f
+-- A tree view. opts = { name = <global frame name>, parent = <frame>, chrome = bool,
+-- tabStyle = "bottom"|"top", readOnly = bool, defaultTab = n }. chrome=false views fill their
+-- parent (SetAllPoints) and sit 20 levels above it; they are NOT mouse-enabled themselves, so the
+-- parent's own controls (e.g. the Inspect frame's close button) stay clickable.
+function ET.NewTreeView(opts)
+  local v = {
+    readOnly  = opts.readOnly and true or false,
+    tabStyle  = opts.tabStyle or "bottom",
+    tabPad    = (opts.tabStyle == "top") and -10 or 0,   -- stock inspect tabs resize with -10
+    activeTab = opts.defaultTab or 2,
+    state     = { ranks = {} },
+    classId   = 8,
+  }
+  local parent = opts.parent or UIParent
+  v.frame = CreateFrame("Frame", opts.name, parent)
+  if opts.chrome then
+    BuildChrome(v)
+  else
+    v.frame:SetAllPoints(parent)
+    v.frame:SetFrameLevel(parent:GetFrameLevel() + 20)
+  end
+  v.frame:Hide()
+  BuildTreeArea(v)
+  BuildTabs(v)
+  return v
 end
 
 -- ---------------------------------------------------------------------------
 -- Talent buttons.
 -- ---------------------------------------------------------------------------
 local function NodeTooltip(btn)
-  local node = btn.node
-  local rank = ET.state.ranks[node.id] or 0
+  local v, node = btn.view, btn.node
+  local rank = v.state.ranks[node.id] or 0
   GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
 
   -- A spell-granting talent shows the granted spell's REAL client tooltip via a spell hyperlink:
@@ -296,7 +358,8 @@ local function NodeTooltip(btn)
   GameTooltip:AddLine("Rank " .. rank .. "/" .. node.maxRank, 0.8, 0.8, 0.8)
   local shown = (rank > 0) and rank or 1
   GameTooltip:AddLine(node.tooltip[shown] or "", 1, 0.82, 0, true)
-  if rank < node.maxRank then
+  -- Read-only (inspect) views show the current rank only: no "Next rank", nothing to learn.
+  if not v.readOnly and rank < node.maxRank then
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Next rank:", 0.6, 0.6, 0.6)
     GameTooltip:AddLine(node.tooltip[rank + 1] or "", 0.3, 1, 0.3, true)
@@ -309,20 +372,23 @@ end
 -- era_talent row), no SYNC follows, and the UI simply doesn't change -- a harmless no-op. As
 -- nodes get wired server-side they start responding without any addon change.
 local function OnNodeClick(btn)
-  local node = btn.node
-  local rank = ET.state.ranks[node.id] or 0
+  local v, node = btn.view, btn.node
+  if v.readOnly then return end   -- inspect view: never learns
+  local rank = v.state.ranks[node.id] or 0
   if rank >= node.maxRank then return end
-  if (ET.state.availPts or 0) < 1 then
+  if (v.state.availPts or 0) < 1 then
     UIErrorsFrame:AddMessage("Not enough talent points.", 1, 0.2, 0.2, 1, 3)
     return
   end
   ET.Learn(node.id)     -- server validates; UI updates when the SYNC arrives
 end
 
-local function EnsureButtons(tree)
-  local f = ET.frame
+local function EnsureButtons(v, tree)
+  local f = v.frame
+  local pool = f.pools[tree]
+  if not pool then pool = {}; f.pools[tree] = pool end
   for _, node in ipairs(tree.talents) do
-    if not f.buttons[node.id] then
+    if not pool[node.id] then
       local b = CreateFrame("Button", nil, f.container)
       b:SetWidth(BTN); b:SetHeight(BTN)
       b:SetPoint("TOPLEFT", colX(node.col), -rowY(node.tier))
@@ -359,20 +425,27 @@ local function EnsureButtons(tree)
       b.rank:SetPoint("CENTER", b.rankBorder, "CENTER", 0, 0)
 
       b.node = node
+      b.view = v
       b:SetScript("OnEnter", NodeTooltip)
       b:SetScript("OnLeave", function() GameTooltip:Hide() end)
       b:SetScript("OnClick", OnNodeClick)
-      f.buttons[node.id] = b
+      pool[node.id] = b
     end
   end
+  return pool
 end
 
-local function RenderButtons(tree)
-  local f = ET.frame
+local function RenderButtons(v, tree)
+  local f = v.frame
+  -- Another tree's buttons (a different inspect target, or an era change) must not linger.
+  for t, other in pairs(f.pools) do
+    if t ~= tree then for _, b in pairs(other) do b:Hide() end end
+  end
+  local pool = f.pools[tree]
   for _, node in ipairs(tree.talents) do
-    local b = f.buttons[node.id]
-    local rank = ET.state.ranks[node.id] or 0
-    if node.tab == ET._activeTab then
+    local b = pool[node.id]
+    local rank = v.state.ranks[node.id] or 0
+    if node.tab == v.activeTab then
       b:Show()
       b.rank:SetText(rank .. "/" .. node.maxRank)
       local icon = b:GetNormalTexture()
@@ -381,7 +454,7 @@ local function RenderButtons(tree)
       if rank > 0 then
         if icon then icon:SetDesaturated(nil) end
         b.rank:SetTextColor(0.1, 1, 0.1)          -- has points (incl. maxed): green
-      elseif NodeAvailable(node) then
+      elseif NodeAvailable(v, node) then
         if icon then icon:SetDesaturated(nil) end
         b.rank:SetTextColor(1, 1, 1)              -- reachable now: full colour, white rank
       else
@@ -397,8 +470,9 @@ end
 -- ---------------------------------------------------------------------------
 -- Prereq connectors (branches + arrowheads), using the real atlases/TexCoords.
 -- ---------------------------------------------------------------------------
-function ET.DrawArrows(tree)
-  local f = ET.frame
+function ET.DrawArrows(tree, v)
+  v = v or ET.ownView
+  local f = v.frame
   for _, t in ipairs(f._branches) do t:Hide() end
   for _, t in ipairs(f._arrows) do t:Hide() end
 
@@ -436,7 +510,7 @@ function ET.DrawArrows(tree)
   for _, x in ipairs(tree.talents) do byId[x.id] = x end
 
   for _, node in ipairs(tree.talents) do
-    if node.tab == ET._activeTab and node.prereqTalent and node.prereqTalent ~= 0 then
+    if node.tab == v.activeTab and node.prereqTalent and node.prereqTalent ~= 0 then
       local from = byId[node.prereqTalent]
       if from and from.tab == node.tab then
         local fcx, fcy = colX(from.col) + BTN / 2, rowY(from.tier) + BTN / 2
@@ -445,7 +519,7 @@ function ET.DrawArrows(tree)
         local dTier = node.tier - from.tier
 
         -- Bright connector only once the target is reachable; greyed while it's still locked.
-        local on = NodeAvailable(node)
+        local on = NodeAvailable(v, node)
         local vert  = on and BRANCH_VERT  or BRANCH_VERT_OFF
         local horz  = on and BRANCH_HORZ  or BRANCH_HORZ_OFF
         local aDown = on and ARROW_DOWN   or ARROW_DOWN_OFF
@@ -479,42 +553,44 @@ end
 -- ---------------------------------------------------------------------------
 -- Footer text (spent-in-active-tab / unspent), tracks SYNC.
 -- ---------------------------------------------------------------------------
-local function UpdateFooter(tree)
-  local f = ET.frame
-  local spent = 0
-  for _, node in ipairs(tree.talents) do
-    if node.tab == ET._activeTab then
-      spent = spent + (ET.state.ranks[node.id] or 0)
-    end
+-- Footer: "<tree> Talents: N" on the left; own panel shows "Unspent Talents: N" on the right, a
+-- read-only (inspect) view shows the spec summary "a/b/c" instead (spent only -- ISYNC has no points).
+local function UpdateFooter(v, tree)
+  local f = v.frame
+  local pts = ET.SpecPoints(tree, v.state.ranks)
+  local tabName = (tree.tabs[v.activeTab] and tree.tabs[v.activeTab].name) or "Talents"
+  f.footerSpent:SetText(tabName .. " Talents: " .. (pts[v.activeTab] or 0))
+  if v.readOnly then
+    f.footerUnspent:SetText(pts[1] .. "/" .. pts[2] .. "/" .. pts[3])
+  else
+    f.footerUnspent:SetText("Unspent Talents: " .. (v.state.availPts or 0))
   end
-  local tabName = (tree.tabs[ET._activeTab] and tree.tabs[ET._activeTab].name) or "Talents"
-  f.footerSpent:SetText(tabName .. " Talents: " .. spent)
-  f.footerUnspent:SetText("Unspent Talents: " .. (ET.state.availPts or 0))
 end
 
 -- ---------------------------------------------------------------------------
--- Public API (functional contract).
+-- View rendering.
 -- ---------------------------------------------------------------------------
-function ET.ShowTab(i)
-  local tree = TreeForState()
+function ET.ShowViewTab(v, i)
+  local tree = TreeFor(v.state.era, v.classId)
   if not tree then return end
-  ET._activeTab = i
+  v.activeTab = i
+  local f = v.frame
   for t = 1, 3 do
-    local tab = ET.frame.tabs[t]
+    local tab = f.tabs[t]
     if tab and tree.tabs[t] then
       tab:SetText(tree.tabs[t].name)
-      PanelTemplates_TabResize(tab, 0)
+      PanelTemplates_TabResize(tab, v.tabPad)
     end
   end
-  PanelTemplates_SetTab(ET.frame, i)
-  if tree.tabs[i] and tree.tabs[i].background then SetTreeBackground(tree.tabs[i].background) end
+  PanelTemplates_SetTab(f, i)
+  if tree.tabs[i] and tree.tabs[i].background then SetTreeBackground(v, tree.tabs[i].background) end
 
   -- Availability inputs for this tab: id lookup + points spent in the active tree (for NodeAvailable).
-  ET._byId = {}
-  ET._spentActive = 0
+  v.byId = {}
+  v.spentActive = 0
   for _, n in ipairs(tree.talents) do
-    ET._byId[n.id] = n
-    if n.tab == i then ET._spentActive = ET._spentActive + (ET.state.ranks[n.id] or 0) end
+    v.byId[n.id] = n
+    if n.tab == i then v.spentActive = v.spentActive + (v.state.ranks[n.id] or 0) end
   end
 
   -- Height from the WHOLE tree's deepest tier (not per-tab, so switching tabs never jumps
@@ -523,12 +599,39 @@ function ET.ShowTab(i)
   for _, n in ipairs(tree.talents) do
     if n.tier > maxTier then maxTier = n.tier end
   end
-  ET.frame.container:SetHeight(rowY(maxTier) + BTN + 20)
+  f.container:SetHeight(rowY(maxTier) + BTN + 20)
 
-  EnsureButtons(tree)
-  RenderButtons(tree)
-  ET.DrawArrows(tree)
-  UpdateFooter(tree)
+  EnsureButtons(v, tree)
+  RenderButtons(v, tree)
+  ET.DrawArrows(tree, v)
+  UpdateFooter(v, tree)
+end
+
+-- Bind a view to a state ({ era, ranks, availPts }) + class and repaint it on its active tab.
+-- Returns false (nothing drawn) when no tree exists for (era, classId).
+function ET.RenderView(v, state, classId)
+  v.state, v.classId = state, classId
+  if not TreeFor(state.era, classId) then return false end
+  ET.ShowViewTab(v, v.activeTab or 2)
+  return true
+end
+
+-- ---------------------------------------------------------------------------
+-- Own panel (public contract -- unchanged behaviour, now one view instance).
+-- ---------------------------------------------------------------------------
+local function OwnView()
+  if not ET.ownView then
+    ET.ownView = ET.NewTreeView({ name = "EraTalentFrame", chrome = true, tabStyle = "bottom",
+                                  readOnly = false, defaultTab = 2 })
+    ET.frame = ET.ownView.frame
+  end
+  return ET.ownView
+end
+
+function ET.ShowTab(i)
+  local v = OwnView()
+  v.state, v.classId = ET.state, ET._classId
+  ET.ShowViewTab(v, i)
 end
 
 -- Called by Comms on every SYNC.
@@ -537,13 +640,11 @@ function ET.Refresh()
   if ET.frame.petTalents then
     if ET._classId == 3 then ET.frame.petTalents:Show() else ET.frame.petTalents:Hide() end
   end
-  local tree = TreeForState()
-  if not tree then return end
-  ET.ShowTab(ET._activeTab or 2)   -- default to Fire (where Improved Fireball lives); repaints + footer
+  ET.RenderView(ET.ownView, ET.state, ET._classId)   -- default tab 2 = Fire (Improved Fireball)
 end
 
 function ET.TogglePanel()
-  BuildFrame()
+  OwnView()
   if ET.frame:IsShown() then ET.frame:Hide() else ET.frame:Show(); ET.Refresh() end
 end
 
@@ -561,6 +662,5 @@ function ET.InitUI()
   -- player's class TOKEN (2nd UnitClass return, present on 3.3.5a); fall back to Mage if unavailable.
   local _, token = UnitClass("player")
   ET._classId = CLASS_ID_BY_TOKEN[token or ""] or 8
-  ET._activeTab = 2
-  BuildFrame()
+  OwnView()
 end

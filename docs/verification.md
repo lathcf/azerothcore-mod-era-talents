@@ -24,3 +24,14 @@
 - Fork `413bea61` + mod-playerbots `b949b50` + IP `977e200` + bridge `759c100`, this module at `e10f859`, consumed as a clone via the overlay's `setup.sh`.
 - `apply-patches.sh` after the overlay's own 14 patches: 10/10 applied. cmake: `mod-playerbots found — bot era talents compiled in`. Build exit 0.
 - Worldserver: `loaded 1011 talent nodes (generation c8293d48)`; `.eratalents doctor` on a TBC-band rogue bot: 0 orphans, AI resolve working; a shaman bot levelled 40→65 shows the TBC quest-taught totems (947026 / 3599 / 947174).
+
+## 2026-09-25 — inspect view (ERATAL INSPECT / ISYNC)
+- This module at `a7bf919` on the overlay stack (fork `413bea61`, mod-playerbots `b949b50`). Worldserver build exit 0; `EraTalentBots.cpp` / `EraTalentsComms.cpp` compiled warning-free; binary canary: `ISYNC` present.
+- Headless: `test_inspect.lua`, `test_comms.lua`, `test_tooltip.lua` pass; `pytest tools` 249 passed; `era_audit` 0 findings. No YAML/generator change — generation stamp unchanged, no `patch-V.mpq` re-ship.
+- Real 3.3.5a client (Inspect → Talents on a grouped bot, level set with `.character level`), all passing:
+  - level 40 → Vanilla era tree, opens on the primary tree, footer `a/b/c` matches `.eratalents doctor`; top tabs switch trees; no "Next rank"; clicks inert;
+  - level 65 → TBC era tree, scrolls to the tier-9 capstone;
+  - level 75 → stock WotLK talents, no overlay;
+  - mid-duel inspect → stock view (server denial, `managed=0`);
+  - target switching with the frame open → never shows another character's tree;
+  - own `N` panel unchanged (learning works); the Inspect frame's close button works over the overlay.

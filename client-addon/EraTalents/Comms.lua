@@ -1,7 +1,11 @@
--- ERATAL protocol: receive SYNC (replace-per-message), send HELLO / LEARN.
+-- ERATAL protocol: receive SYNC (replace-per-message) + ISYNC (inspect replies), send HELLO / LEARN / INSPECT.
 -- No WoW API calls at file scope (so this file loads under a headless lua5.1 test).
 EraTalents = EraTalents or {}
 local ET = EraTalents
+
+-- Inspect state: `current` = the GUID string the stock Inspect frame is showing (set by Inspect.lua),
+-- `cache[guid]` = { era, managed, classId, ranks } from ISYNC. Wiped when the Inspect frame closes.
+ET.inspect = ET.inspect or { current = nil, cache = {} }
 
 -- Parse "SYNC <era> <managed> <availPts> [<seq>/<total>] <id:rank,...>". A <seq>/<total>
 -- sentinel enables multi-chunk accumulation: seq==1 (or no sentinel) resets
@@ -28,6 +32,36 @@ function ET.ParseSync(state, message)
     state.ranks[tonumber(id)] = tonumber(rank)
   end
   return true
+end
+
+-- Parse "ISYNC <guid> <era> <managed> <classId> [<seq>/<total>] <id:rank,...>" into cache[guid].
+-- Same accumulate/reset rules as ParseSync (sentinel-less or seq==1 resets that guid's ranks; seq>1
+-- merges). A denial is "ISYNC <guid> 0 0 0" (managed=false, no ranks). Returns the guid, or nil if
+-- the message is not an ISYNC. Pure: no WoW API.
+function ET.ParseInspectSync(cache, message)
+  local guid, era, managed, cls, rest =
+    string.match(message, "^ISYNC%s+(%S+)%s+(%d+)%s+(%d+)%s+(%d+)%s*(.*)$")
+  if not guid then return nil end
+  local seq, total, tail = string.match(rest, "^(%d+)/(%d+)%s*(.*)$")
+  local isFirst = true
+  if seq then
+    isFirst = (tonumber(seq) == 1)
+    rest = tail
+  end
+  local e = cache[guid]
+  if not isFirst and not e then return guid end   -- orphan continuation (its chunk 1 was dropped): ignore
+  if isFirst then
+    e = { ranks = {} }
+    cache[guid] = e
+  end
+  e.partial = (seq ~= nil) and (tonumber(seq) < tonumber(total))   -- more chunks still to come
+  e.era = tonumber(era)
+  e.managed = (tonumber(managed) == 1)
+  e.classId = tonumber(cls)
+  for id, rank in string.gmatch(rest, "(%d+):(%d+)") do
+    e.ranks[tonumber(id)] = tonumber(rank)
+  end
+  return guid
 end
 
 -- Generation canary. The server sends "GEN <stamp>" (from era_talent_meta) after every SYNC;
@@ -57,6 +91,17 @@ function ET.OnAddonMsg(prefix, message)
     ET.CheckGeneration(gen)
     return
   end
+  local iguid = string.match(message, "^ISYNC%s+(%S+)")
+  if iguid then
+    -- Only the target the Inspect frame is showing NOW is cached. A reply that lands after the frame
+    -- closed or moved on would otherwise survive the OnHide wipe and be served as a stale (or, for a
+    -- late continuation chunk, partial) tree on the next inspect of that character.
+    if iguid == ET.inspect.current then
+      ET.ParseInspectSync(ET.inspect.cache, message)
+      if ET.RefreshInspect then ET.RefreshInspect() end   -- Inspect.lua (absent in tests)
+    end
+    return
+  end
   if ET.ParseSync(ET.state, message) then
     if ET.Refresh then ET.Refresh() end   -- TalentUI hook (may be absent in tests)
   end
@@ -67,6 +112,7 @@ function ET.Send(payload)
 end
 function ET.RequestSync() ET.Send("HELLO") end
 function ET.Learn(id) ET.Send("LEARN " .. id) end
+function ET.RequestInspect(guid) ET.Send("INSPECT " .. guid) end
 
 function ET.InitComms()
   local f = CreateFrame("Frame")

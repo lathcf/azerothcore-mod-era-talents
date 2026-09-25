@@ -51,6 +51,15 @@ namespace EraTalentBots
     {
         return IsBot(p) ? BotEra(p) : EraFromIP(p);
     }
+
+    bool IsEraManaged(Player* p)
+    {
+        if (!p || !sEraTalentsConfig->Enabled())
+            return false;
+        if (IsBot(p) && !sEraTalentsConfig->BotTalents())
+            return false;
+        return EraHasTalentTrees(EraFor(p));
+    }
 }
 
 #ifdef MOD_PLAYERBOTS
@@ -653,13 +662,9 @@ bool EraTalentBots_SpecTabs(Player* p, uint32* tabs3)
     // them as untalented/tab-0. Live bug: a Shadow-era-built priest master auto-detected as
     // the group HEALER (priest tab 0 = Disc), so login 5 fielded no healer bot. The fork's
     // patched GetPlayerSpecTabs calls this for any Player*; we decide who it serves.
-    if (!p || !tabs3 || !sEraTalentsConfig->Enabled())
-        return false;
-    if (IsBot(p) && !sEraTalentsConfig->BotTalents())
+    if (!p || !tabs3 || !EraTalentBots::IsEraManaged(p))
         return false;
     EraId era = EraTalentBots::EraFor(p);
-    if (!EraHasTalentTrees(era))
-        return false;
 
     std::array<uint32, 3> t{ 0, 0, 0 };
     bool cached = false;

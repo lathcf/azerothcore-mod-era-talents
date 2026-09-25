@@ -19,6 +19,13 @@ namespace EraTalentBots
     // EraGlyphGate::Allowed): a bot's era is a fact of its level band, not of the knob.
     EraId EraFor(Player* p);
 
+    // THE "is this character's talent set era-managed" rule (its Vanilla/TBC era tree replaces
+    // its native talents): module enabled, not a bot while EraTalents.BotTalents is off, and
+    // EraFor(p)'s era has authored trees. Shared by the spec-tab bridge and inspect
+    // (EraTalentsComms) so the two can never disagree. Exists in EVERY build (IsBot is false
+    // without playerbots, so it reduces to the real-player rule).
+    bool IsEraManaged(Player* p);
+
     // Full reconcile at the bot's CURRENT level. Always tears down stale managed-era rows
     // first (bracket up-moves would otherwise leave era clone spells in the spellbook where
     // the AI's name-resolver can pick them). Then: managed band + class has nodes -> strip

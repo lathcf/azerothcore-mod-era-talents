@@ -14,6 +14,7 @@ function ET.Init()
   if ET.InitUI then ET.InitUI() end
   if ET.InitHook then ET.InitHook() end
   if ET.InitTooltips then ET.InitTooltips() end
+  if ET.InitInspect then ET.InitInspect() end
 end
 
 local boot = CreateFrame("Frame")

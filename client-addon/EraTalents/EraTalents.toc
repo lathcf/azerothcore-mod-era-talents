@@ -26,3 +26,4 @@ Comms.lua
 Tooltip.lua
 TalentUI.lua
 Hook.lua
+Inspect.lua
