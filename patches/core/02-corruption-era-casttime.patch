@@ -1,5 +1,5 @@
 diff --git a/src/server/game/Spells/SpellInfo.cpp b/src/server/game/Spells/SpellInfo.cpp
-index 3494dc9c..ddcb3340 100644
+index 8d30f81e..4b0506aa 100644
 --- a/src/server/game/Spells/SpellInfo.cpp
 +++ b/src/server/game/Spells/SpellInfo.cpp
 @@ -27,6 +27,7 @@
@@ -10,9 +10,9 @@ index 3494dc9c..ddcb3340 100644
  
  uint32 GetTargetFlagMask(SpellTargetObjectTypes objType)
  {
-@@ -2751,11 +2752,33 @@ int32 SpellInfo::GetMaxDuration() const
+@@ -2777,11 +2778,38 @@ int32 SpellInfo::GetMaxDuration() const
  
- uint32 SpellInfo::CalcCastTime(Unit* caster, Spell* spell) const
+ uint32 SpellInfo::CalcCastTime(WorldObject* caster, Spell* spell) const
  {
 +    // era-talents patch 0019: restore the Vanilla base cast time for a Vanilla-era warlock's Corruption.
 +    // Corruption is instant in WotLK, and mod-individual-progression does NOT restore Vanilla cast times,
@@ -32,8 +32,13 @@ index 3494dc9c..ddcb3340 100644
 +    if (caster)
 +    {
 +        auto it = s_eraVanillaCastTime.find(Id);
-+        if (it != s_eraVanillaCastTime.end() && caster->HasAura(932930 /*ERA_VANILLA_CASTTIME_MARKER, misc 5*/))
-+            eraBase = it->second;
++        if (it != s_eraVanillaCastTime.end())
++        {
++            // The caster may be any WorldObject (upstream fe691366); only a Unit can carry the marker aura.
++            Unit const* unitCaster = caster->ToUnit();
++            if (unitCaster && unitCaster->HasAura(932930 /*ERA_VANILLA_CASTTIME_MARKER, misc 5*/))
++                eraBase = it->second;
++        }
 +    }
 +
      // not all spells have cast time index and this is all is pasiive abilities
