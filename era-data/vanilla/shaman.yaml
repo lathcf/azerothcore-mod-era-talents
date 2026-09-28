@@ -1455,6 +1455,11 @@ helpers:
   cooldown: 20000        # RecoveryTime -> 20s (override stock 8000)
   powerCost: 319         # flat ManaCost 319 (Vanilla)
   manaCostPct: 0         # override inherited ManaCostPct 8 (else core charges the % on top)
+  proc: { flags: 139808, school: 8, typeMask: 1 }   # = stock 17364's spell_proc row (SchoolMask 8 Nature, SpellTypeMask 1
+                        # DAMAGE). A clone inherits NO spell_proc row, and aura 271 is not in SpellMgr's isTriggerAura list,
+                        # so the core auto-generates none either: the debuff never procced and both charges sat for the full
+                        # 12 s (prod report 2026-09-28). flags = the inherited DBC ProcTypeMask, explicit because the
+                        # generator requires it; TAKEN-only flags, so no SpellPhaseMask.
   effects:
   - { effect: 6,  aura: 271, basePoints: 19, dieSides: 1, misc: 8, targetA: 6 }   # +20% nature from caster (mask A=1049603/A_2=8192 inherited)
   - { effect: 64, trigger: 32175, basePoints: 0,  dieSides: 0, targetA: 6 }        # weapon strike / +20%-nature charge 1
@@ -1575,6 +1580,7 @@ helpers:
   family: 11
   mask: 67108864   # word-A bit26 = stock Mana Tide pulse 16191's own identity (2026-08-26 item audit — see block note)
   attributes: 320   # PASSIVE(0x40)+DO_NOT_LOG(0x100) — mandatory, see block note above
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT — stock totem pulses (52042/39609) carry it; without it the core credits heal/mana threat to the TOTEM and mobs attack it (prod report 2026-09-28)
   effects:
   - { effect: 65, aura: 24, basePoints: 140, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 3000 }
   client:
@@ -1586,6 +1592,7 @@ helpers:
   family: 11
   mask: 67108864
   attributes: 320
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 155, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 3000 }
   client:
@@ -1597,6 +1604,7 @@ helpers:
   family: 11
   mask: 67108864
   attributes: 320
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 240, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 3000 }
   client:
@@ -3285,6 +3293,7 @@ helpers:
 - id: 931190
   name: Healing Stream
   template: 5672
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT — stock totem pulses (52042/39609) carry it; without it the core credits heal/mana threat to the TOTEM and mobs attack it (prod report 2026-09-28)
   effects:
   - { effect: 65, aura: 8, basePoints: 6, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }   # PERIODIC_HEAL; template already inherits SpellClassMask bit13 (8192, Restorative Totems' bind) + EffectAuraPeriod_1=2000 (2s tick, CONFIRMED, both dumped) — amplitude: set explicitly anyway (belt-and-suspenders, generator now supports the key) so this doesn't silently depend on the template's own period
   client:
@@ -3294,6 +3303,7 @@ helpers:
 - id: 931191
   name: Healing Stream
   template: 6371
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 8, basePoints: 8, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3303,6 +3313,7 @@ helpers:
 - id: 931192
   name: Healing Stream
   template: 6372
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 8, basePoints: 10, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3312,6 +3323,7 @@ helpers:
 - id: 931193
   name: Healing Stream
   template: 10460
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 8, basePoints: 12, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3321,6 +3333,7 @@ helpers:
 - id: 931194
   name: Healing Stream
   template: 10461
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 8, basePoints: 14, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3387,6 +3400,7 @@ helpers:
 - id: 931210
   name: Mana Spring
   template: 5677
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT — stock totem pulses (52042/39609) carry it; without it the core credits heal/mana threat to the TOTEM and mobs attack it (prod report 2026-09-28)
   effects:
   - { effect: 65, aura: 24, basePoints: 4, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }   # PERIODIC_ENERGIZE misc 0 = POWER_MANA; template's own EffectAuraPeriod_1=0 (stock never ticks this one), so amplitude: is set explicitly here to the intended 2s tick (generator now supports the key — see tools/gen_era_talents.py helper_overrides) instead of falling into core's amplitude<=0 -> 1000ms guard
   client:
@@ -3396,6 +3410,7 @@ helpers:
 - id: 931211
   name: Mana Spring
   template: 10491
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 6, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3405,6 +3420,7 @@ helpers:
 - id: 931212
   name: Mana Spring
   template: 10493
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 8, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:
@@ -3414,6 +3430,7 @@ helpers:
 - id: 931213
   name: Mana Spring
   template: 10494
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 10, dieSides: 0, misc: 0, targetA: 1, radius: 9, amplitude: 2000 }
   client:

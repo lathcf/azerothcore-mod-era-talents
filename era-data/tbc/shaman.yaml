@@ -2782,6 +2782,10 @@ helpers:
   cooldown: 10000          # TBC 10 s (live RecoveryTime is 8000) — from the cached TBC tooltip; RecoveryTime is outside _ref's swept columns
   procCharges: 2           # TBC (live 4) — "the next 2 sources of Nature damage"
   procTypeMask: 139944     # TBC (live 139808)
+  proc: { flags: 139944, school: 8, typeMask: 1 }   # Nature damage only (= stock 17364's SchoolMask 8 / SpellTypeMask 1). With no
+                           # row the core AUTO-GENERATES one (aura 87 is a trigger aura) with SchoolMask 0, so the TBC
+                           # TAKEN_MELEE/RANGED_AUTO bits let white hits eat both charges. Family 0 on purpose: the TBC
+                           # debuff is consumed by anyone's Nature damage, matching aura 87 boosting everyone.
   effects:
   - { effect: 6,  aura: 87, misc: 8, basePoints: 19, dieSides: 1, targetA: 6 }              # MOD_DAMAGE_PERCENT_TAKEN, Nature, EFFECTIVE +20% from EVERYONE (mask inherited; aura 87 ignores it)
   - { effect: 64, trigger: 32175, basePoints: 0,  dieSides: 0, targetA: 6 }                 # main-hand weapon strike (stock, LIVE_MATCH apart from AttributesEx4)
@@ -5230,6 +5234,7 @@ helpers:
 - id: 947180
   name: Healing Stream
   template: 25566    # inherits word-A bit13 (node 20250 / node 20248); live 25566 is the WotLK aura-23 rework, so the effect row below re-authors TBC's own shape
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT — stock totem pulses (52042/39609) carry it; without it the core credits heal/mana threat to the TOTEM and mobs attack it (prod report 2026-09-28)
   effects:
   - { effect: 65, aura: 8, basePoints: 18, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }   # PERIODIC_HEAL; TBC bp 17 + DieSides 1 = EFFECTIVE 18. effect 65 + radius 10 per Amendment B.8; amplitude explicit as on the Mana Spring pulses
   client:
@@ -5259,6 +5264,7 @@ helpers:
 - id: 947195
   name: Mana Spring
   template: 5677
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT — stock totem pulses (52042/39609) carry it; without it the core credits heal/mana threat to the TOTEM and mobs attack it (prod report 2026-09-28)
   effects:
   - { effect: 65, aura: 24, basePoints: 6, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }   # PERIODIC_ENERGIZE misc 0 = POWER_MANA; TBC bp 5 + DieSides 1 = EFFECTIVE 6. effect 65 + radius 10 kept per Amendment B.8; amplitude authored because the template's own period is 0
   client:
@@ -5268,6 +5274,7 @@ helpers:
 - id: 947196
   name: Mana Spring
   template: 10491
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 9, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }
   client:
@@ -5277,6 +5284,7 @@ helpers:
 - id: 947197
   name: Mana Spring
   template: 10493
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 13, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }
   client:
@@ -5286,6 +5294,7 @@ helpers:
 - id: 947198
   name: Mana Spring
   template: 10494
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 17, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }
   client:
@@ -5295,6 +5304,7 @@ helpers:
 - id: 947199
   name: Mana Spring
   template: 25569
+  attributesEx: 1024   # SPELL_ATTR1_NO_THREAT
   effects:
   - { effect: 65, aura: 24, basePoints: 20, dieSides: 0, misc: 0, targetA: 1, radius: 10, amplitude: 2000 }   # TBC bp 19 + DieSides 1 = EFFECTIVE 20; live 25569 is the aura-85 mp5 rework, so the whole row is authored
   client:
