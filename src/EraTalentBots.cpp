@@ -101,7 +101,9 @@ namespace
     }
 
     // ---------------------------------------------------------------------------------------
-    // Trainer ReqLevel index: SpellId -> MIN(trainer_spell.ReqLevel) over every trainer row.
+    // Trainer ReqLevel index: SpellId -> MIN(trainer_spell.ReqLevel) over every trainer row,
+    // lowered to a learning item's RequiredLevel where a book teaches it earlier (see
+    // BuildTrainerLevelIndex — IP gates Vanilla book spells' trainer rows to 61/71).
     //
     // WHY THIS EXISTS (bracket DOWN-move residue, bots only). A bot moved DOWN a level bracket
     // (mod-player-bot-level-brackets, or a `.character level` in testing) keeps every
@@ -608,6 +610,34 @@ namespace EraTalentBots
                 g_trainerMinReqLevel[spellId] = f[1].Get<uint32>();
             } while (r->NextRow());
         }
+        // A trainer row is not the only way to learn a spell. Vanilla book spells (Prayer of
+        // Fortitude, Eviscerate r9, the AQ20 manuals...) are taught by a learning item (spellid_1
+        // 483 / 55884 teaches spellid_2), and IP's class_trainers.sql moves their trainer rows to
+        // 61/71 precisely BECAUSE they were book-only in that era. Trainer level alone therefore
+        // reads a level-60 bot's legitimately-read book as "above level" and strips it — live
+        // 2026-10-01 on a player's alt logged in as a bot (Prayer of Fortitude, Eviscerate r9 gone
+        // after every alt-bot login), and it undoes mod-raid-roster's LearnBookSpells on every
+        // roster bot. The real floor is the LOWER of the trainer and book levels; a book with no
+        // level requirement means no level can rule the spell out, so drop it from the index.
+        uint32 bookLowered = 0;
+        if (QueryResult r = WorldDatabase.Query(
+                "SELECT spellid_2, MIN(RequiredLevel) FROM item_template "
+                "WHERE spellid_1 IN (483, 55884) AND spellid_2 > 0 GROUP BY spellid_2"))
+        {
+            do
+            {
+                Field* f = r->Fetch();
+                auto it = g_trainerMinReqLevel.find(f[0].Get<uint32>());
+                uint32 bookLevel = f[1].Get<uint32>();
+                if (it == g_trainerMinReqLevel.end() || bookLevel >= it->second)
+                    continue;
+                if (bookLevel == 0)
+                    g_trainerMinReqLevel.erase(it);
+                else
+                    it->second = bookLevel;
+                ++bookLowered;
+            } while (r->NextRow());
+        }
         // Companion pass, same startup call (content is already loaded — the loader runs
         // sEraTalentContent->Load() first): every STOCK id any (era, class) node grants. Read-only
         // afterwards, same no-lock argument as the trainer index above.
@@ -624,8 +654,8 @@ namespace EraTalentBots
                             ++stockGrants;
                     }
 
-        LOG_INFO("module", "[mod-era-talents] trainer level map: {} stock spell(s) indexed by min trainer ReqLevel, {} node-granted stock id(s) excluded across {} (era,class) set(s)",
-            uint32(g_trainerMinReqLevel.size()), stockGrants, uint32(g_eraNodeGrantStock.size()));
+        LOG_INFO("module", "[mod-era-talents] trainer level map: {} stock spell(s) indexed by min trainer ReqLevel ({} lowered to a learning item's RequiredLevel), {} node-granted stock id(s) excluded across {} (era,class) set(s)",
+            uint32(g_trainerMinReqLevel.size()), bookLowered, stockGrants, uint32(g_eraNodeGrantStock.size()));
     }
 }
 
